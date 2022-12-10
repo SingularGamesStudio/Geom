@@ -5,11 +5,8 @@
 using namespace std;
 
 int main() {
-    int n;
-    cin >> n;
-    vector<Point> points(n);
-    for (int i = 0; i < n; i++) {
-        cin >> points[i].x >> points[i].y;
-    }
-    cout << (Polygon(points)).isConvex();
+    Point a, b, c, d;
+    cin >> a.x >> a.y >> b.x >> b.y >> c.x >> c.y >> d.x >> d.y;
+    Point res = Line(a, b).intersect(Line(c, d));
+    cout << res.x << " " << res.y;
 }
