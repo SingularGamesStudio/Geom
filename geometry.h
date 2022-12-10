@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <random>
 #include <vector>
 
 using std::vector, std::abs, std::sqrt;
@@ -102,6 +103,13 @@ class Point {
 
     Point normalized() const {
         return Point(x / abs(), y / abs());
+    }
+
+    bool within(Point a, Point b) const {
+        if (lessorequal(std::min(a.x, b.x), x) && lessorequal(x, std::max(a.x, b.x)))
+            if (lessorequal(std::min(a.y, b.y), y) && lessorequal(y, std::max(a.y, b.y)))
+                return true;
+        return false;
     }
 
     double abs() const {
@@ -355,8 +363,29 @@ class Polygon : public Shape {
         return false;
     }
 
-    bool containsPoint(const Point&) const override {
-        return false;
+    bool containsPoint(const Point& point) const override {
+        for (size_t i = 0; i < points.size(); i++) {
+            if (points[i] == point)
+                return true;
+        }
+        for (size_t i = 0; i < points.size(); i++) {
+            Line edge = Line(points[i], points[i] - getEdge(i));
+            if (equal(0, (edge.project(point) - point).abs()) && point.within(points[i], points[i] - getEdge(i))) {
+                return true;
+            }
+        }
+        std::mt19937 rnd(42);
+        Line raycast = Line(point, Point(point.x + static_cast<double>(rnd()) / 10000000.0 + 1, point.y + static_cast<double>(rnd()) / 10000000.0 + 1));
+        bool inside = false;
+        for (size_t i = 0; i < points.size(); i++) {
+            Line edge = Line(points[i], points[i] - getEdge(i));
+            if (!edge.parralel(raycast)) {
+                Point intersection = edge.intersect(raycast);
+                if (intersection.within(points[i], points[i] - getEdge(i)))
+                    inside = !inside;
+            }
+        }
+        return inside;
     }
 
     void rotate(const Point& center, double angle) override {
@@ -570,11 +599,6 @@ class Triangle : public Polygon {
 };
 
 /*
-
-Polygon::containspoint
-
-У любой фигуры можно спросить:
-
 double perimeter() - периметр;
 double area() - площадь;
 bool operator==(const Shape& another) - совпадает ли эта фигура с другой как множество точек. (В частности, треугольник ABC равен треугольнику BCA.)
