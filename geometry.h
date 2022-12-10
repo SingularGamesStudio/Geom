@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <iostream>
@@ -5,7 +6,7 @@
 #include <vector>
 
 using std::vector, std::abs, std::sqrt;
-const double eps = 1e-7;
+const double eps = 1e-5;
 const double pi = std::acos(-1);
 const double deg2rad = 2.0 * pi / 360.0;
 
@@ -194,7 +195,7 @@ class Shape {
         return false;
     }
 
-    bool operator==(const Shape& another) {
+    bool operator==(const Shape& another) const {
         return equals(another);
     }
 
@@ -217,6 +218,7 @@ class Shape {
     void reflect(const Point& center) {
         scale(center, -1);
     }
+    virtual ~Shape() {}
 };
 
 class Polygon : public Shape {
@@ -246,13 +248,13 @@ class Polygon : public Shape {
 
     template <typename T>
     Polygon(T i) {
-        static_assert(std::equal<T, Point>());
+        static_assert(std::is_same<T, Point>::value);
         points.push_back(i);
     }
 
     template <typename T, typename... R>
     Polygon(T i, R... r) : Polygon(r...) {
-        static_assert(std::equal<T, Point>());
+        static_assert(std::is_same<T, Point>::value);
         points.push_back(i);
     }
 
@@ -315,19 +317,19 @@ class Polygon : public Shape {
             return false;
         for (size_t start = 0; start < points.size(); start++) {
             for (size_t i = 0; i < points.size(); i++) {
-                if (getEdge(i).abs() != other.getEdge((start + i) % points.size()).abs() &&
-                    getCos(i) != other.getCos((start + i) % points.size()) &&
-                    getSin(i) != other.getSin((start + i) % points.size()))
+                if (!equal(getEdge(i).abs(), other.getEdge((start + i) % points.size()).abs()) ||
+                    !equal(getCos(i), other.getCos((start + i) % points.size())) ||
+                    !equal(getSin(i), other.getSin((start + i) % points.size())))
                     break;
                 if (i == points.size() - 1)
                     return true;
             }
-            for (int i = static_cast<int>(points.size()) - 1; i >= 0; i--) {
-                if (getEdge(i).abs() != other.getEdge((start + i) % points.size()).abs() &&
-                    getCos(i) != other.getCos((start + i) % points.size()) &&
-                    getSin(i) != other.getSin((start + i) % points.size()))
+            for (int i = 0; i < static_cast<int>(points.size()); i++) {
+                if (!equal(getEdge(i).abs(), other.getEdge((start - i + 1 + points.size()) % points.size()).abs()) ||
+                    !equal(getCos(i), other.getCos((start - i + points.size()) % points.size())) ||
+                    !equal(getSin(i), other.getSin((start - i + points.size()) % points.size())))
                     break;
-                if (i == 0)
+                if (i == static_cast<int>(points.size()) - 1)
                     return true;
             }
         }
@@ -338,25 +340,26 @@ class Polygon : public Shape {
         if (dynamic_cast<const Polygon*>(&another) == nullptr)
             return false;
         const Polygon& other = *(dynamic_cast<const Polygon*>(&another));
-        if (other.points.size() != points.size())
-            return false;
+        if (other.points.size() != points.size()) return false;
         for (size_t start = 0; start < points.size(); start++) {
-            double coef = getEdge(0).abs() / other.getEdge((start + 0) % points.size()).abs();
+            double coef = getEdge(0).abs() / other.getEdge(start).abs();
             for (size_t i = 0; i < points.size(); i++) {
-                if (getEdge(i).abs() != coef * other.getEdge((start + i) % points.size()).abs() &&
-                    getCos(i) != other.getCos((start + i) % points.size()) &&
-                    getSin(i) != other.getSin((start + i) % points.size()))
+                if (!equal(getEdge(i).abs(), coef * other.getEdge((start + i) % points.size()).abs()) ||
+                    !equal(getCos(i), other.getCos((start + i) % points.size())) ||
+                    !equal(getSin(i), other.getSin((start + i) % points.size()))) {
                     break;
+                }
                 if (i == points.size() - 1)
                     return true;
             }
-            coef = getEdge(points.size() - 1).abs() / other.getEdge((start + points.size() - 1) % points.size()).abs();
-            for (int i = static_cast<int>(points.size()) - 1; i >= 0; i--) {
-                if (getEdge(i).abs() != coef * other.getEdge((start + i) % points.size()).abs() &&
-                    getCos(i) != other.getCos((start + i) % points.size()) &&
-                    getSin(i) != other.getSin((start + i) % points.size()))
+            coef = getEdge(0).abs() / other.getEdge((start + 1 + points.size()) % points.size()).abs();
+            for (int i = 0; i < static_cast<int>(points.size()); i++) {
+                if (!equal(getEdge(i).abs(), coef * other.getEdge((start - i + 1 + points.size()) % points.size()).abs()) ||
+                    !equal(getCos(i), other.getCos((start - i + points.size()) % points.size())) ||
+                    !equal(getSin(i), -other.getSin((start - i + points.size()) % points.size()))) {
                     break;
-                if (i == 0)
+                }
+                if (i == static_cast<int>(points.size()) - 1)
                     return true;
             }
         }
@@ -381,7 +384,7 @@ class Polygon : public Shape {
             Line edge = Line(points[i], points[i] - getEdge(i));
             if (!edge.parralel(raycast)) {
                 Point intersection = edge.intersect(raycast);
-                if (intersection.within(points[i], points[i] - getEdge(i)))
+                if (intersection.x > point.x && intersection.within(points[i], points[i] - getEdge(i)))
                     inside = !inside;
             }
         }
@@ -450,7 +453,8 @@ class Ellipse : public Shape {
     }
 
     double perimeter() const override {
-        return pi * (a() + b());
+        // std::cerr << f1.x << " " << f1.y << " " << f2.x << " " << f2.y << " " << d << " " << a() << " " << b() << " " << 2.0 * pi * sqrt((a() * a() + b() * b()) / 2.0) << "\n";
+        return pi * (3 * (a() + b()) - sqrt((3 * a() + b()) * (a() + 3 * b())));
     }
 
     double area() const override {
@@ -566,6 +570,7 @@ class Triangle : public Polygon {
     }
 
    public:
+    using Polygon::Polygon;
     Triangle() {}
 
     Circle circumscribedCircle() const {
